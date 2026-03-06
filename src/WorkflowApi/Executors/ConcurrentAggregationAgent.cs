@@ -57,7 +57,7 @@ internal sealed class ConcurrentAggregationAgent : AIAgent
 
         // Check if we have a finalized decision already
         var finalDecision = typedSession.GetFinalDecision();
-        string decisionJson;
+        DecisionResult decisionJson;
 
         if (finalDecision != null)
         {
@@ -70,14 +70,13 @@ internal sealed class ConcurrentAggregationAgent : AIAgent
             decisionJson = AggregateAndDecide(allMessages);
             
             // If we have a complete decision (not Pending), cache it in the session
-            if (!decisionJson.Contains("\"Outcome\":\"Pending\""))
-            {
+            if(decisionJson.Outcome == "Pending")
                 typedSession.SetFinalDecision(decisionJson);
-            }
+            
         }
 
         // Create response message with the decision
-        var responseMessage = new ChatMessage(ChatRole.Assistant, decisionJson)
+        var responseMessage = new ChatMessage(ChatRole.Assistant, JsonSerializer.Serialize(decisionJson, JsonOptions))
         {
             MessageId = Guid.NewGuid().ToString("N"),
             AuthorName = this.Name
@@ -119,7 +118,7 @@ internal sealed class ConcurrentAggregationAgent : AIAgent
 
         // Check if we have a finalized decision already
         var finalDecision = typedSession.GetFinalDecision();
-        string decisionJson;
+        DecisionResult decisionJson;
 
         if (finalDecision != null)
         {
@@ -132,10 +131,8 @@ internal sealed class ConcurrentAggregationAgent : AIAgent
             decisionJson = AggregateAndDecide(allMessages);
             
             // If we have a complete decision (not Pending), cache it in the session
-            if (!decisionJson.Contains("\"Outcome\":\"Pending\""))
-            {
+            if (decisionJson.Outcome == "Pending")
                 typedSession.SetFinalDecision(decisionJson);
-            }
         }
 
         // Yield response update with the decision
@@ -144,13 +141,13 @@ internal sealed class ConcurrentAggregationAgent : AIAgent
             AgentId = this.Id,
             AuthorName = this.Name,
             Role = ChatRole.Assistant,
-            Contents = [new TextContent(decisionJson)],
+            Contents = [new TextContent(JsonSerializer.Serialize(decisionJson, JsonOptions))],
             ResponseId = Guid.NewGuid().ToString("N"),
             MessageId = Guid.NewGuid().ToString("N")
         };
 
         // Notify the session of the input and output messages.
-        var responseMessage = new ChatMessage(ChatRole.Assistant, decisionJson)
+        var responseMessage = new ChatMessage(ChatRole.Assistant, JsonSerializer.Serialize(decisionJson, JsonOptions))
         {
             MessageId = Guid.NewGuid().ToString("N"),
             AuthorName = this.Name
@@ -160,7 +157,7 @@ internal sealed class ConcurrentAggregationAgent : AIAgent
         await this.ChatHistoryProvider.InvokedAsync(invokedContext, cancellationToken);
     }
 
-    private string AggregateAndDecide(List<ChatMessage> messages)
+    private DecisionResult AggregateAndDecide(List<ChatMessage> messages)
     {
         // Check if we already have a final decision in the history
         var previousDecision = messages
@@ -171,7 +168,7 @@ internal sealed class ConcurrentAggregationAgent : AIAgent
         if (previousDecision != null && previousDecision.Outcome != "Pending")
         {
             // Return the existing final decision
-            return JsonSerializer.Serialize(previousDecision, JsonOptions);
+            return previousDecision;
         }
 
         // Check if we have messages from all three agents
@@ -183,13 +180,13 @@ internal sealed class ConcurrentAggregationAgent : AIAgent
         if (!hasKyc || !hasFraud || !hasIncome)
         {
             // If we're missing any responses, return empty decision
-            return JsonSerializer.Serialize(new DecisionResult
+            return new DecisionResult
             {
                 Outcome = "Pending",
                 Conditions = Array.Empty<string>(),
                 Summary = "Waiting for all agents to complete...",
                 Details = new DecisionDetails()
-            }, JsonOptions);
+            };
         }
 
         // Parse messages from all three agents
@@ -198,9 +195,7 @@ internal sealed class ConcurrentAggregationAgent : AIAgent
         var income = Parse<IncomeResult>(messages, "Income");
 
         var decision = Decide(kyc, fraud, income);
-        var decisionJson = JsonSerializer.Serialize(decision, JsonOptions);
-
-        return decisionJson;
+        return decision;
     }
 
     private DecisionResult? TryParseDecision(string? text)
@@ -286,7 +281,7 @@ internal sealed class ConcurrentAggregationAgent : AIAgent
     /// </summary>
     internal sealed class ConcurrentAggregationAgentSession : AgentSession
     {
-        private string? _finalDecision;
+        private DecisionResult? _finalDecision;
 
         internal ConcurrentAggregationAgentSession()
         {
@@ -297,9 +292,9 @@ internal sealed class ConcurrentAggregationAgent : AIAgent
         {
         }
 
-        internal string? GetFinalDecision() => _finalDecision;
+        internal DecisionResult? GetFinalDecision() => _finalDecision;
 
-        internal void SetFinalDecision(string decision) => _finalDecision = decision;
+        internal void SetFinalDecision(DecisionResult decision) => _finalDecision = decision;
     }
 }
 
