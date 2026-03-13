@@ -5,21 +5,16 @@ using Microsoft.Agents.AI.DevUI;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.AI;
+using WorkflowApi;
 using WorkflowApi.Executors;
 using WorkflowApi.Frauds;
 using WorkflowApi.Incomes;
 using WorkflowApi.Kycs;
 
 var builder = WebApplication.CreateBuilder(args);
+ChatClientFactory.Create(builder.Configuration);
 
-var endpoint = builder.Configuration["AZURE_OPENAI_ENDPOINT"] ?? throw new InvalidOperationException("AZURE_OPENAI_ENDPOINT is not set.");
-var deploymentName = builder.Configuration["AZURE_OPENAI_DEPLOYMENT_NAME"] ?? "gpt-4.1-mini";
-var chatClient = new AzureOpenAIClient(
-        new Uri(endpoint), new AzureCliCredential())
-    .GetChatClient(deploymentName)
-    .AsIChatClient();
-
-builder.Services.AddChatClient(chatClient);
+builder.Services.AddChatClient(ChatClientFactory.Create(builder.Configuration));
 
 builder.AddAIAgent("KYC", "You validate identity. Use the ValidateCpf to validate the CPF. Return ONLY a JSON object with keys: " +
                           "agent (must be exactly \"KYC\"), status (string: Approved|Rejected|Review), notes (string).")
