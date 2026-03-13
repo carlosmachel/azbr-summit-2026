@@ -6,9 +6,10 @@ namespace WorkflowApi.Incomes;
 public static class IncomeTools
 {
     [Description("Assess income capacity for a credit application")]
-    public static string IncomeTool(
+    public static async Task<string> IncomeTool(
         [Description("The credit application JSON payload")] string applicationJson)
     {
+        //await Task.Delay(TimeSpan.FromSeconds(15));
         try
         {
             using var doc = JsonDocument.Parse(applicationJson);

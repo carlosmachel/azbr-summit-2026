@@ -6,9 +6,10 @@ namespace WorkflowApi.Frauds;
 public static class FraudTools
 {
     [Description("Assess fraud risk for a credit application")]
-    public static string FraudTool(
+    public static async Task<string> FraudTool(
         [Description("The credit application JSON payload")] string applicationJson)
     {
+        //await Task.Delay(TimeSpan.FromSeconds(10));
         try
         {
             using var doc = JsonDocument.Parse(applicationJson);
