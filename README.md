@@ -18,7 +18,7 @@ This project is a backend API developed in .NET 10, demonstrating an automated d
    - Edit `src/WorkflowApi/appsettings.Development.json` with your Azure OpenAI credentials:
      - `AZURE_OPENAI_ENDPOINT`
      - `AZURE_OPENAI_DEPLOYMENT_NAME`
-     - `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`
+     - `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET` *(optional if you are already authenticated via `az login`)*
 4. **Run the application:**
    ```bash
    cd src/WorkflowApi
@@ -54,6 +54,32 @@ azbr-summit-2026/
 ├── LICENSE
 ├── README.md
 └── azbr-summit-2026.sln
+```
+
+## Workflow architecture
+The credit workflow uses a **fan-out / fan-in** pattern orchestrated by custom executors:
+
+1. **`ConcurrentStartAgent`** — Entry point that receives the credit application and fans out the request to all validation agents in parallel.
+2. **KYC, Fraud, Income agents** — Three AI agents run concurrently, each performing its own validation (identity, fraud risk, income capacity).
+3. **`ConcurrentAggregationExecutor`** — Barrier executor that collects the responses from all three agents. Once all results arrive, it parses them and produces a final **`DecisionResult`** (Approved, Rejected, or Review) with conditions and a summary.
+
+```
+                         ┌──────────┐
+                         │  Start   │
+                         │  Agent   │
+                         └────┬─────┘
+                   ┌──────────┼──────────┐
+                   ▼          ▼          ▼
+              ┌────────┐ ┌────────┐ ┌────────┐
+              │  KYC   │ │ Fraud  │ │ Income │
+              └───┬────┘ └───┬────┘ └───┬────┘
+                  └──────────┼──────────┘
+                         ┌───▼───┐
+                         │ Aggr. │
+                         │Executor│
+                         └───┬───┘
+                             ▼
+                      DecisionResult
 ```
 
 ## Technologies used
