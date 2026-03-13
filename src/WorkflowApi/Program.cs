@@ -29,7 +29,7 @@ builder.AddAIAgent("Income",  "You assess income capacity. Use the IncomeTool to
     .WithAITool(AIFunctionFactory.Create(IncomeTools.IncomeTool, name: "income_tool"));
 
 builder.Services.AddSingleton(new ConcurrentStartAgent());
-builder.Services.AddSingleton(new ConcurrentAggregationAgent());
+builder.Services.AddSingleton(new ConcurrentAggregationExecutor());
 
 builder.AddWorkflow("credit-workflow", (sp, key) =>
 {
@@ -37,7 +37,7 @@ builder.AddWorkflow("credit-workflow", (sp, key) =>
     var fraudAgent = sp.GetRequiredKeyedService<AIAgent>("Fraud");
     var incomeAgent = sp.GetRequiredKeyedService<AIAgent>("Income");
     var startAgent = sp.GetRequiredService<ConcurrentStartAgent>();
-    var aggregationAgent = sp.GetRequiredService<ConcurrentAggregationAgent>();
+    var aggregationAgent = sp.GetRequiredService<ConcurrentAggregationExecutor>();
     
     var workflow = new WorkflowBuilder(startAgent)
         .AddFanOutEdge(startAgent, [kycAgent, fraudAgent, incomeAgent])
