@@ -13,7 +13,8 @@ namespace WorkflowApi.Executors;
 internal sealed class ConcurrentAggregationExecutor() :
     Executor<List<ChatMessage>, string?>("ConcurrentAggregationExecutor")
 {
-    private readonly List<ChatMessage> _messages = [];
+    private const string MessagesStateKey = "aggregation_messages";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -27,8 +28,14 @@ internal sealed class ConcurrentAggregationExecutor() :
     /// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests.
     /// The default is <see cref="CancellationToken.None"/>.</param>
     /// <returns>A task representing the asynchronous operation</returns>
-    public override ValueTask<string?> HandleAsync(List<ChatMessage> message, IWorkflowContext context, CancellationToken cancellationToken = default)
+    public override async ValueTask<string?> HandleAsync(List<ChatMessage> message, IWorkflowContext context, CancellationToken cancellationToken = default)
     {
+        // Read or initialize per-execution message list from workflow state store
+        var messages = await context.ReadOrInitStateAsync(
+            MessagesStateKey,
+            () => new List<ChatMessage>(),
+            cancellationToken);
+
         foreach (var msg in message)
         {
             System.Console.WriteLine($"Agent={msg.AuthorName} Text={msg.Text}");
@@ -38,29 +45,32 @@ internal sealed class ConcurrentAggregationExecutor() :
         {
             if (!string.IsNullOrWhiteSpace(msg.Text))
             {
-                _messages.Add(msg);
+                messages.Add(msg);
             }
         }
 
-        if (_messages.Count >= 3)
+        // Persist updated messages back to workflow state
+        await context.QueueStateUpdateAsync(MessagesStateKey, messages, cancellationToken);
+
+        if (messages.Count >= 3)
         {
-            var kyc = Parse<KycResult>("KYC");
-            var fraud = Parse<FraudResult>("Fraud");
-            var income = Parse<IncomeResult>("Income");
+            var kyc = Parse<KycResult>(messages, "KYC");
+            var fraud = Parse<FraudResult>(messages, "Fraud");
+            var income = Parse<IncomeResult>(messages, "Income");
 
             if (kyc != null && fraud != null && income != null)
             {
                 var decision = Decide(kyc, fraud, income);
-                return new ValueTask<string?>(JsonSerializer.Serialize(decision, JsonOptions));
+                return JsonSerializer.Serialize(decision, JsonOptions);
             }
         }
 
-        return new ValueTask<string?>((string?)null);
+        return null;
     }
 
-    private T? Parse<T>(string agentName) where T : class, new()
+    private static T? Parse<T>(List<ChatMessage> messages, string agentName) where T : class, new()
     {
-        var message = this._messages.LastOrDefault(m => string.Equals(m.AuthorName, agentName, StringComparison.OrdinalIgnoreCase));
+        var message = messages.LastOrDefault(m => string.Equals(m.AuthorName, agentName, StringComparison.OrdinalIgnoreCase));
         if (message?.Text is null)
         {
             return null;
